@@ -154,34 +154,42 @@
             'Middleware N8N/MongoDB': '#54A0FF'
         };
 
-        // Funció per separar punts que coincideixen
-        function adjustOverlappingPoints(acciones) {
-            const adjusted = [...acciones];
+        // Funció millorada per separar punts mantenint valors originals
+        function adjustOverlappingPointsWithOriginalValues(acciones) {
+            const adjusted = acciones.map(a => ({
+                ...a,
+                displayX: a.esforç,     // Posició visual
+                displayY: a.impacte,   // Posició visual
+                originalX: a.esforç,   // Valor original per hover
+                originalY: a.impacte   // Valor original per hover
+            }));
+            
             const positionMap = new Map();
             
-            // Agrupar per posició
-            acciones.forEach((accion, index) => {
-                const key = `${accion.esforç}-${accion.impacte}`;
+            // Agrupar per posició original
+            adjusted.forEach((accion, index) => {
+                const key = `${accion.originalX}-${accion.originalY}`;
                 if (!positionMap.has(key)) {
                     positionMap.set(key, []);
                 }
                 positionMap.get(key).push({...accion, originalIndex: index});
             });
             
-            // Ajustar posicions solapades
+            // Ajustar només posicions visuals dels punts solapats
             positionMap.forEach((group, key) => {
                 if (group.length > 1) {
-                    const radius = 0.15;
+                    const radius = 0.12; // Separació visual menor
                     const angleStep = (2 * Math.PI) / group.length;
                     
                     group.forEach((accion, i) => {
-                        if (i > 0) {
+                        if (i > 0) { // El primer punt es queda al centre
                             const angle = i * angleStep;
                             const offsetX = radius * Math.cos(angle);
                             const offsetY = radius * Math.sin(angle);
                             
-                            adjusted[accion.originalIndex].esforç += offsetX;
-                            adjusted[accion.originalIndex].impacte += offsetY;
+                            // Només canviar posició visual, mantenir valors originals
+                            adjusted[accion.originalIndex].displayX += offsetX;
+                            adjusted[accion.originalIndex].displayY += offsetY;
                         }
                     });
                 }
@@ -190,28 +198,30 @@
             return adjusted;
         }
 
-        // Agrupar per mòdul per crear traces amb punts separats
+        // Crear traces amb valors originals preservats
         const moduls = [...new Set(acciones.map(a => a.modul))];
-        const adjustedAcciones = adjustOverlappingPoints(acciones);
+        const adjustedAcciones = adjustOverlappingPointsWithOriginalValues(acciones);
         
         let originalTraces = moduls.map(modul => {
             const accionesModul = adjustedAcciones.filter(a => a.modul === modul);
             return {
-                x: accionesModul.map(a => a.esforç),
-                y: accionesModul.map(a => a.impacte),
+                x: accionesModul.map(a => a.displayX),        // Posició visual
+                y: accionesModul.map(a => a.displayY),        // Posició visual
                 text: accionesModul.map(a => a.codi),
                 customdata: accionesModul.map(a => ({
                     codi: a.codi,
                     item: a.item,
                     descripcio: a.descripcio,
-                    modul: a.modul
+                    modul: a.modul,
+                    originalX: a.originalX,                    // Valor original
+                    originalY: a.originalY                     // Valor original
                 })),
                 mode: 'markers+text',
                 type: 'scatter',
                 name: modul,
                 marker: {
                     color: modulColors[modul],
-                    size: 14,
+                    size: 16,                                  // Punts més grans
                     line: { color: 'white', width: 2 }
                 },
                 textposition: 'middle center',
@@ -222,8 +232,8 @@
                 },
                 hovertemplate: 
                     '<b>%{customdata.codi}</b> (Item %{customdata.item})<br>' +
-                    'Impacte: %{y:.1f}<br>' +
-                    'Esforç: %{x:.1f}<br>' +
+                    'Impacte: %{customdata.originalY}<br>' +              // Valor original
+                    'Esforç: %{customdata.originalX}<br>' +               // Valor original
                     'Mòdul: %{customdata.modul}<br>' +
                     '%{customdata.descripcio}<br>' +
                     '<extra></extra>'
@@ -300,65 +310,53 @@
         // Crear el gràfic
         Plotly.newPlot('chartDiv', originalTraces, layout, config);
 
-        // Funcions de control
+        // Funcions de control (sense canvis)
         function showAllCategories() {
             Plotly.newPlot('chartDiv', originalTraces, layout, config);
             updateActiveButton(0);
         }
 
         function filterByCategory(categoryPrefix) {
-            // Filtrar accions per categoria
             const categoryActions = adjustedAcciones.filter(a => a.codi.startsWith(categoryPrefix));
             
-            // Crear nous traces només amb la categoria seleccionada
             const filteredTraces = moduls.map(modul => {
                 const accionesModul = categoryActions.filter(a => a.modul === modul);
                 
                 if (accionesModul.length === 0) {
                     return {
-                        x: [],
-                        y: [],
-                        text: [],
-                        customdata: [],
-                        mode: 'markers+text',
-                        type: 'scatter',
-                        name: modul,
-                        marker: { color: modulColors[modul], size: 14, line: { color: 'white', width: 2 } },
-                        textposition: 'middle center',
-                        textfont: { color: '#2c3e50', size: 11, family: 'Arial Black' },
-                        hovertemplate: '<extra></extra>',
+                        x: [], y: [], text: [], customdata: [],
+                        mode: 'markers+text', type: 'scatter', name: modul,
+                        marker: { color: modulColors[modul], size: 16, line: { color: 'white', width: 2 } },
                         visible: false
                     };
                 }
                 
                 return {
-                    x: accionesModul.map(a => a.esforç),
-                    y: accionesModul.map(a => a.impacte),
+                    x: accionesModul.map(a => a.displayX),
+                    y: accionesModul.map(a => a.displayY),
                     text: accionesModul.map(a => a.codi),
                     customdata: accionesModul.map(a => ({
                         codi: a.codi,
                         item: a.item,
                         descripcio: a.descripcio,
-                        modul: a.modul
+                        modul: a.modul,
+                        originalX: a.originalX,
+                        originalY: a.originalY
                     })),
                     mode: 'markers+text',
                     type: 'scatter',
                     name: modul,
                     marker: {
                         color: modulColors[modul],
-                        size: 14,
+                        size: 16,
                         line: { color: 'white', width: 2 }
                     },
                     textposition: 'middle center',
-                    textfont: { 
-                        color: '#2c3e50', 
-                        size: 11, 
-                        family: 'Arial Black' 
-                    },
+                    textfont: { color: '#2c3e50', size: 11, family: 'Arial Black' },
                     hovertemplate: 
                         '<b>%{customdata.codi}</b> (Item %{customdata.item})<br>' +
-                        'Impacte: %{y:.1f}<br>' +
-                        'Esforç: %{x:.1f}<br>' +
+                        'Impacte: %{customdata.originalY}<br>' +
+                        'Esforç: %{customdata.originalX}<br>' +
                         'Mòdul: %{customdata.modul}<br>' +
                         '%{customdata.descripcio}<br>' +
                         '<extra></extra>'
@@ -367,7 +365,6 @@
             
             Plotly.newPlot('chartDiv', filteredTraces, layout, config);
             
-            // Actualitzar botó actiu
             const buttons = document.querySelectorAll('.control-btn');
             const categoryNames = {
                 'S': 'Seguretat de la Informació',
