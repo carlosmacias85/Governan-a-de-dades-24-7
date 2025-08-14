@@ -102,6 +102,12 @@
             <button class="control-btn" onclick="resetZoom()">Reset Zoom</button>
         </div>
         
+        <div class="controls" style="margin-top: 10px;">
+            <button class="control-btn" onclick="filterByPriority('urgent')">Prioritat Urgent</button>
+            <button class="control-btn" onclick="filterByPriority('mitjana')">Prioritat Mitjana</button>
+            <button class="control-btn" onclick="filterByPriority('estrategica')">Prioritat Estratègica</button>
+        </div>
+        
         <div id="chartDiv"></div>
     </div>
 
@@ -380,18 +386,93 @@
             });
         }
 
+        function filterByPriority(priority) {
+            let itemsToShow = [];
+            
+            switch(priority) {
+                case 'urgent':
+                    // Items 1-9 + S6 (item 29 - compliment legal)
+                    itemsToShow = [1, 2, 3, 4, 5, 6, 7, 8, 9, 29];
+                    break;
+                case 'mitjana':
+                    // Items 10-18 + A5 (item 32) + D2 (item 33)
+                    itemsToShow = [10, 11, 12, 13, 14, 15, 16, 17, 18, 32, 33];
+                    break;
+                case 'estrategica':
+                    // Items 19-28 + G3 (item 30) + G6 (item 31)
+                    itemsToShow = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31];
+                    break;
+            }
+            
+            // Filtrar acciones per item number
+            const priorityActions = adjustedAcciones.filter(a => itemsToShow.includes(a.item));
+            
+            // Crear nous traces només amb la prioritat seleccionada
+            const filteredTraces = moduls.map(modul => {
+                const accionesModul = priorityActions.filter(a => a.modul === modul);
+                
+                if (accionesModul.length === 0) {
+                    return {
+                        x: [], y: [], text: [], customdata: [],
+                        mode: 'markers+text', type: 'scatter', name: modul,
+                        marker: { color: modulColors[modul], size: 16, line: { color: 'white', width: 2 } },
+                        visible: false
+                    };
+                }
+                
+                return {
+                    x: accionesModul.map(a => a.displayX),
+                    y: accionesModul.map(a => a.displayY),
+                    text: accionesModul.map(a => a.codi),
+                    customdata: accionesModul.map(a => ({
+                        codi: a.codi,
+                        item: a.item,
+                        descripcio: a.descripcio,
+                        modul: a.modul,
+                        originalX: a.originalX,
+                        originalY: a.originalY
+                    })),
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    name: modul,
+                    marker: {
+                        color: modulColors[modul],
+                        size: 16,
+                        line: { color: 'white', width: 2 }
+                    },
+                    textposition: 'middle center',
+                    textfont: { color: '#2c3e50', size: 11, family: 'Arial Black' },
+                    hovertemplate: 
+                        '<b>%{customdata.codi}</b> (Item %{customdata.item})<br>' +
+                        'Impacte: %{customdata.originalY}<br>' +
+                        'Esforç: %{customdata.originalX}<br>' +
+                        'Mòdul: %{customdata.modul}<br>' +
+                        '%{customdata.descripcio}<br>' +
+                        '<extra></extra>'
+                };
+            });
+            
+            Plotly.newPlot('chartDiv', filteredTraces, layout, config);
+            
+            // Actualitzar botó actiu
+            const buttons = document.querySelectorAll('.control-btn');
+            const priorityNames = {
+                'urgent': 'Prioritat Urgent',
+                'mitjana': 'Prioritat Mitjana',
+                'estrategica': 'Prioritat Estratègica'
+            };
+            
+            buttons.forEach((btn, i) => {
+                const isActive = btn.textContent.trim() === priorityNames[priority];
+                btn.classList.toggle('active', isActive);
+            });
+        }
+
         function resetZoom() {
             showAllCategories();
             Plotly.relayout('chartDiv', {
                 'xaxis.range': [0, 11],
                 'yaxis.range': [0, 11]
-            });
-        }
-
-        function updateActiveButton(activeIndex) {
-            const buttons = document.querySelectorAll('.control-btn');
-            buttons.forEach((btn, i) => {
-                btn.classList.toggle('active', i === activeIndex);
             });
         }
     </script>
